@@ -6,7 +6,9 @@
 
 The simulator knows where every car is. The controller doesn't: it only sees what its loop detectors report.
 
-![Live control room](docs/images/live-view.png)
+
+https://github.com/user-attachments/assets/d1984490-2cf3-4907-88bc-2a2271279d4a
+
 
 </div>
 

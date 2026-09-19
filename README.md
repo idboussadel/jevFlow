@@ -32,21 +32,21 @@ Ground truth is used for one thing only: **grading** the controllers afterwards.
 
 ### Realism, layer by layer
 
-| Layer | What's modelled |
-|---|---|
-| **Vehicles** | Vectorised [Intelligent Driver Model](https://en.wikipedia.org/wiki/Intelligent_driver_model), with individual desired speed, time gap, acceleration and braking per driver. Cars, vans, buses, trucks, ambulances. |
-| **Drivers** | Reaction delay when moving off, so start-up lost time and ~1,650 veh/h/lane saturation flow *emerge* rather than being scripted. Stop/go choice at yellow onset (dilemma zone), including rare real red-light running. Gap acceptance for permissive left turns, with "sneakers" on the change interval. Turning vehicles yield to pedestrians. |
-| **Demand** | Cowan M3 bunched headways (Akçelik & Chung), time-varying profiles, platoons released by an upstream signal, and finite approaches with an off-map *vertical queue* when traffic spills back. |
-| **Signal timing** | Yellow and all-red intervals derived from the **ITE** kinematic formulas. MUTCD pedestrian walk and clearance. Max-out only when a conflicting call is waiting. Emergency preemption that never skips clearance intervals. |
-| **Detectors** | Per lane: a stop-line loop, an advance dual-loop speed trap and an upstream entry loop. Per-vehicle misses, false actuations, speed quantisation, and scheduled **stuck-on / dead / chattering** faults. |
-| **Estimation** | Input–output queue counting with a discharge-wave model and drift re-anchoring. FIFO delay re-identification. Harmonic-mean speed. Plausibility checks that flag broken loops and fall back to historical-volume models. |
-| **Evaluation** | HCM control delay and level of service, 95th-percentile delay, stops, throughput, Jain fairness, spillback time, red-light violations, pedestrian and emergency-vehicle delay. Vehicles still waiting at the end are counted with their accrued delay, so starving an approach can't win. |
+| Layer             | What's modelled                                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vehicles**      | Vectorised [Intelligent Driver Model](https://en.wikipedia.org/wiki/Intelligent_driver_model), with individual desired speed, time gap, acceleration and braking per driver. Cars, vans, buses, trucks, ambulances.                                                                                                                             |
+| **Drivers**       | Reaction delay when moving off, so start-up lost time and ~1,650 veh/h/lane saturation flow _emerge_ rather than being scripted. Stop/go choice at yellow onset (dilemma zone), including rare real red-light running. Gap acceptance for permissive left turns, with "sneakers" on the change interval. Turning vehicles yield to pedestrians. |
+| **Demand**        | Cowan M3 bunched headways (Akçelik & Chung), time-varying profiles, platoons released by an upstream signal, and finite approaches with an off-map _vertical queue_ when traffic spills back.                                                                                                                                                   |
+| **Signal timing** | Yellow and all-red intervals derived from the **ITE** kinematic formulas. MUTCD pedestrian walk and clearance. Max-out only when a conflicting call is waiting. Emergency preemption that never skips clearance intervals.                                                                                                                      |
+| **Detectors**     | Per lane: a stop-line loop, an advance dual-loop speed trap and an upstream entry loop. Per-vehicle misses, false actuations, speed quantisation, and scheduled **stuck-on / dead / chattering** faults.                                                                                                                                        |
+| **Estimation**    | Input–output queue counting with a discharge-wave model and drift re-anchoring. FIFO delay re-identification. Harmonic-mean speed. Plausibility checks that flag broken loops and fall back to historical-volume models.                                                                                                                        |
+| **Evaluation**    | HCM control delay and level of service, 95th-percentile delay, stops, throughput, Jain fairness, spillback time, red-light violations, pedestrian and emergency-vehicle delay. Vehicles still waiting at the end are counted with their accrued delay, so starving an approach can't win.                                                       |
 
 ---
 
 ## How Jev is used
 
-Jev is a *System One* model: structured state in, typed decision out. JevFlow follows TypeSafe's guidance to the letter: **code calculates, Jev judges.**
+Jev is a _System One_ model: structured state in, typed decision out. JevFlow follows TypeSafe's guidance to the letter: **code calculates, Jev judges.**
 
 - **Only legal actions are offered.** The safety guard derives them from the controller state (min green met? room to extend before max-out?), so the Choice's answer space itself makes an unsafe answer impossible.
 - **Code does the arithmetic.** The state includes deterministic phase-level summaries (queue served vs waiting, longest red wait, green left before max-out, switching lost time) next to the raw per-approach detector data.
@@ -89,19 +89,37 @@ answer = response.choices["next_action"]   # .choice, .probabilities, .confidenc
     "time_since_east_last_received_green": 41.9
   },
   "approaches": {
-    "north": { "currently_green": true, "volume_vehicles_30s": 9, "occupancy_percent": 61.3,
-               "average_speed_kmh": 8.4, "estimated_queue_vehicles": 11.2,
-               "average_delay_seconds": 29.8, "detector_health": "ok" }
+    "north": {
+      "currently_green": true,
+      "volume_vehicles_30s": 9,
+      "occupancy_percent": 61.3,
+      "average_speed_kmh": 8.4,
+      "estimated_queue_vehicles": 11.2,
+      "average_delay_seconds": 29.8,
+      "detector_health": "ok"
+    }
   },
   "phase_summary": {
-    "east_west": { "status": "waiting_on_red", "total_queue_vehicles": 6.0,
-                   "longest_wait_since_green_seconds": 41.9, "pedestrians_waiting": true }
+    "east_west": {
+      "status": "waiting_on_red",
+      "total_queue_vehicles": 6.0,
+      "longest_wait_since_green_seconds": 41.9,
+      "pedestrians_waiting": true
+    }
   },
-  "special_conditions": { "emergency_vehicle_present": false, "queue_spillback_detected": false,
-                          "detectors_degraded": [] },
-  "legal_actions": ["keep_current_phase", "extend_current_green", "switch_to_east_west"]
+  "special_conditions": {
+    "emergency_vehicle_present": false,
+    "queue_spillback_detected": false,
+    "detectors_degraded": []
+  },
+  "legal_actions": [
+    "keep_current_phase",
+    "extend_current_green",
+    "switch_to_east_west"
+  ]
 }
 ```
+
 </details>
 
 ---
@@ -132,28 +150,29 @@ Interactive API docs: <http://127.0.0.1:8000/docs>
 
 ## Scenarios
 
-| Key | Scenario | What it tests |
-|---|---|---|
-| `rush_hour` | Morning Rush | A platooned commuter wave on north–south vs a side street |
-| `balanced_midday` | Balanced Midday | Even demand, heavy pedestrian calls lengthening min greens |
-| `stadium_surge` | Stadium Let-Out | East–west demand past capacity; spillback on short approaches |
-| `emergency_corridor` | Emergency Response | Three ambulances; preemption and queue recovery |
-| `sensor_faults` | Failing Detectors | Stuck-on, dead and chattering loops; graceful degradation |
-| `left_turn_crunch` | Left-Turn Crunch | Heavy permissive lefts against strong opposing flow |
-| `late_night` | Late Night | Sparse demand: rest in green, no pointless red |
+| Key                  | Scenario           | What it tests                                                 |
+| -------------------- | ------------------ | ------------------------------------------------------------- |
+| `rush_hour`          | Morning Rush       | A platooned commuter wave on north–south vs a side street     |
+| `balanced_midday`    | Balanced Midday    | Even demand, heavy pedestrian calls lengthening min greens    |
+| `stadium_surge`      | Stadium Let-Out    | East–west demand past capacity; spillback on short approaches |
+| `emergency_corridor` | Emergency Response | Three ambulances; preemption and queue recovery               |
+| `sensor_faults`      | Failing Detectors  | Stuck-on, dead and chattering loops; graceful degradation     |
+| `left_turn_crunch`   | Left-Turn Crunch   | Heavy permissive lefts against strong opposing flow           |
+| `late_night`         | Late Night         | Sparse demand: rest in green, no pointless red                |
 
 ## Controllers
 
 All controllers see **detector data only**. Benchmarks use common random numbers: identical vehicles, drivers and pedestrians for every controller.
 
-| Key | Controller | Idea |
-|---|---|---|
-| `jev` | Jev (TypeSafe) | Typed choice among legal actions; actuated only if Jev is unavailable |
-| `actuated` | Actuated (gap-out) | NEMA-style: extend green while detectors fire, gap out after 3 s |
-| `max_pressure` | Max-pressure | Varaiya (2013), on *estimated* queues, with a switching margin |
-| `fixed_time` | Fixed-time (Webster) | Pre-timed plan from design-hour volumes |
+| Key            | Controller           | Idea                                                                  |
+| -------------- | -------------------- | --------------------------------------------------------------------- |
+| `jev`          | Jev (TypeSafe)       | Typed choice among legal actions; actuated only if Jev is unavailable |
+| `actuated`     | Actuated (gap-out)   | NEMA-style: extend green while detectors fire, gap out after 3 s      |
+| `max_pressure` | Max-pressure         | Varaiya (2013), on _estimated_ queues, with a switching margin        |
+| `fixed_time`   | Fixed-time (Webster) | Pre-timed plan from design-hour volumes                               |
 
 ![Benchmark](docs/images/benchmark.png)
+![Benchmark](docs/images/benchmark-2.png)
 
 ---
 

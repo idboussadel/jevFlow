@@ -1,0 +1,85 @@
+[project]
+name = "jevflow"
+version = "0.1.0"
+description = "Real-time traffic-signal control with TypeSafe Jev, on top of a realistic microscopic simulation and a virtual sensor layer."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "idboussadel", email = "idbouid@gmail.com" }]
+requires-python = ">=3.13"
+keywords = ["traffic", "simulation", "signal-control", "jev", "typesafe", "intelligent-transportation"]
+classifiers = [
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+dependencies = [
+    "fastapi>=0.141",
+    "httpx>=0.28",
+    "numpy>=2.5",
+    "pandas>=3.0.6",
+    "plotly>=7.1",
+    "pydantic>=2.13",
+    "pydantic-settings>=2.15",
+    "streamlit>=1.64",
+    "typesafe-sdk>=0.7",
+    "uvicorn[standard]>=0.53",
+    "websockets>=15",
+]
+
+[project.scripts]
+jevflow = "jevflow.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.10,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "mypy>=2.3.1",
+    "pandas-stubs>=3.0.5.260914",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.8",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "C4", "SIM", "RUF", "PTH", "PL", "TC", "ASYNC", "S", "PERF"]
+ignore = [
+    "PLR0913",  # simulation kernels legitimately take many parameters
+    "PLR0917",  # ...including positional ones (IDM is conventionally f(v, v0, s, dv, T, a, b, s0))
+    "PLR2004",  # traffic-engineering constants are named where they matter
+    "S311",     # pseudo-random numbers are for simulation, not cryptography
+    "PLC0415",  # lazy imports keep the dashboard start-up fast
+    "TC001", "TC002", "TC003",  # Pydantic and FastAPI resolve annotations at runtime
+    "RUF001", "RUF002",  # en dashes and arrows in UI copy are intentional typography
+    "E501",     # the formatter owns line length; long user-facing strings stay intact
+    "N803", "N806",  # L (approach length) and T (IDM time gap) follow the literature
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+mypy_path = "src"
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+strict_equality = false  # tests re-read signal state that mypy narrows after the first check
+
+[[tool.mypy.overrides]]
+module = ["plotly.*", "streamlit.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"

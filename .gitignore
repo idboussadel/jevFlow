@@ -1,0 +1,18 @@
+
+# crewhandle: local project data (knowledge, notes, agents). Delete this
+# ignore rule to commit the folder, then add `# crewhandle: tracked` so it
+# is not put back on the next open.
+.crewhandle/
+
+# JevFlow
+.env
+data/
+*.db
+*.db-wal
+*.db-shm
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+.venv/

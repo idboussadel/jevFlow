@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JevFlow Live</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #0b0e13; --surface: #0f1115; --surface-2: #151923; --surface-3: #1b2030;
+    --border: rgba(255,255,255,0.07); --text: #e8e9ee; --text-2: #b4b6c0; --muted: #7c7f8c;
+    --accent: #3987e5; --accent-soft: rgba(57,135,229,0.16);
+    --good: #2fb67c; --warning: #e0a526; --serious: #e5733a; --critical: #e5484d;
+    --loop: #38bdf8;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font-family: Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow: hidden; }
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 372px; height: 100vh; gap: 12px; padding: 2px; }
+  .stage { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--border); background: var(--bg); }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  .hud { position: absolute; pointer-events: none; }
+  .hud-tl { top: 14px; left: 14px; max-width: 330px; }
+  .hud-tr { top: 14px; right: 14px; text-align: left; }
+  .hud-bl { bottom: 14px; left: 14px; right: 14px; }
+  .glass { background: rgba(15,17,21,0.72); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; }
+  .clock { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+  .scen { font-size: 13px; color: var(--text-2); margin-top: 6px; }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 9px; font-size: 11px;
+    font-weight: 600; letter-spacing: .04em; text-transform: uppercase; border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2); }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--critical); box-shadow: 0 0 0 0 rgba(229,72,77,.6); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(229,72,77,.55); } 70% { box-shadow: 0 0 0 8px rgba(229,72,77,0); } 100% { box-shadow: 0 0 0 0 rgba(229,72,77,0); } }
+  .legend { font-size: 11px; color: var(--text-2); display: grid; gap: 5px; }
+  .legend i { display: inline-block; width: 16px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .phasebar { display: flex; align-items: center; gap: 14px; }
+  .phase-name { font-weight: 700; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+  .track { position: relative; flex: 1; height: 8px; background: var(--surface-3); border-radius: 99px; overflow: visible; }
+  .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; background: var(--good); transition: width .12s linear; }
+  .tick { position: absolute; top: -4px; width: 2px; height: 16px; background: var(--text-2); opacity: .7; border-radius: 2px; }
+  .tick-label { position: absolute; top: 14px; transform: translateX(-50%); font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .banner { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); padding: 8px 16px; border-radius: 12px;
+    background: rgba(229,72,77,.16); border: 1px solid rgba(229,72,77,.5); color: #ffd7d8; font-weight: 600; font-size: 13px; display: none; }
+  .zoom { position: absolute; right: 14px; bottom: 64px; display: grid; gap: 6px; }
+  .zoom button { pointer-events: all; width: 32px; height: 32px; border-radius: 10px; border: 1px solid var(--border); background: rgba(15,17,21,.8);
+    color: var(--text); font-size: 16px; cursor: pointer; }
+  .zoom button:hover { background: var(--surface-3); }
+
+  .panel { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 2px; scrollbar-width: thin; }
+  .card { background: var(--surface-2); border: 1px solid var(--border); border-radius: 16px; padding: 14px; }
+  .card h3 { margin: 0 0 10px; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .09em; text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: center; }
+  .ctrl { display: flex; align-items: center; justify-content: space-between; }
+  .ctrl-name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 9px 10px; }
+  .kpi .v { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 600; }
+  .kpi .l { white-space: nowrap; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-top: 2px; }
+  .los { font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 5px; margin-left: 6px; vertical-align: 1px; letter-spacing: .04em; }
+  .decision { transition: box-shadow .5s ease, border-color .5s ease; }
+  .decision.flash { box-shadow: 0 0 0 1px var(--accent), 0 0 28px rgba(57,135,229,.35); border-color: var(--accent); }
+  .action { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; margin: 2px 0 8px; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .src-jev { color: #cfe3ff; background: rgba(57,135,229,.18); border-color: rgba(57,135,229,.5); }
+  .src-fallback { color: #ffe7b3; background: rgba(224,165,38,.14); border-color: rgba(224,165,38,.45); }
+  .src-strategy { color: var(--text-2); }
+  .src-safety { color: #ffd7d8; background: rgba(229,72,77,.14); border-color: rgba(229,72,77,.45); }
+  .prob { display: grid; grid-template-columns: 122px 1fr 44px; align-items: center; gap: 8px; margin: 7px 0; font-size: 12px; }
+  .prob .name { color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prob .name.chosen { color: var(--text); font-weight: 600; }
+  .bar { height: 8px; background: var(--surface-3); border-radius: 99px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 99px; background: #4b5163; transition: width .45s cubic-bezier(.2,.8,.2,1); }
+  .bar > div.chosen { background: var(--accent); }
+  .pv { text-align: right; font-family: 'JetBrains Mono', monospace; color: var(--text-2); }
+  .rationale { font-size: 12px; color: var(--text-2); line-height: 1.5; margin-top: 10px; }
+  .congestion { display: flex; gap: 4px; margin-top: 6px; }
+  .congestion span { flex: 1; height: 6px; border-radius: 4px; background: var(--surface-3); }
+  .btn { margin-top: 12px; width: 100%; padding: 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-2); font: inherit; font-size: 12px; cursor: pointer; }
+  .btn:hover { color: var(--text); border-color: rgba(57,135,229,.5); }
+  .qrow { display: grid; grid-template-columns: 46px 1fr 78px; align-items: center; gap: 8px; margin: 9px 0; font-size: 12px; }
+  .qtrack { position: relative; height: 10px; background: var(--surface-3); border-radius: 99px; }
+  .qest { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 99px; transition: width .4s ease; }
+  .qtrue { position: absolute; top: -3px; width: 3px; height: 16px; background: #d6d7dd; border-radius: 2px; transition: left .4s ease; }
+  .qnum { font-family: 'JetBrains Mono', monospace; color: var(--text-2); text-align: right; font-size: 11px; }
+  .feed { display: grid; gap: 6px; }
+  .feed-item { display: grid; grid-template-columns: 50px 1fr auto; gap: 8px; align-items: center; font-size: 12px; padding: 6px 8px;
+    border-radius: 10px; background: var(--surface); border: 1px solid var(--border); }
+  .feed-item .t { font-family: 'JetBrains Mono', monospace; color: var(--muted); font-size: 11px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .empty { color: var(--muted); font-size: 12px; }
+  .modal { position: fixed; inset: 0; background: rgba(5,7,10,.72); display: none; align-items: center; justify-content: center; z-index: 10; }
+  .modal .box { width: min(820px, 94vw); max-height: 88vh; display: flex; flex-direction: column; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 18px; overflow: hidden; }
+  .modal header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .modal pre { margin: 0; padding: 16px 18px; overflow: auto; font-family: 'JetBrains Mono', monospace; font-size: 12px; line-height: 1.55; color: var(--text-2); }
+  .k { color: #9ec5f4; } .s { color: #b9e4c9; } .n { color: #f3c98b; } .b { color: #e87ba4; }
+  .summary { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,7,10,.55); }
+  .summary .glass { padding: 22px 26px; min-width: 360px; }
+  .summary h2 { margin: 0 0 4px; font-size: 20px; }
+  .summary .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-top: 16px; }
+  .summary .big { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 600; }
+  .conn { position: absolute; bottom: 64px; left: 14px; font-size: 11px; color: var(--muted); }
+  @media (max-width: 980px) { .app { grid-template-columns: 1fr; grid-template-rows: 62vh auto; overflow-y: auto; height: auto; }
+    html, body { overflow: auto; } .panel { overflow: visible; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="stage" id="stage">
+    <canvas id="map" aria-label="Live top-down view of the intersection"></canvas>
+    <div class="hud hud-tl glass">
+      <div class="row"><span class="pill" id="status"><span class="live-dot"></span>Live</span><span class="pill mono" id="speed">×1</span></div>
+      <div class="clock" id="clock" style="margin-top:10px">00:00</div>
+      <div class="scen" id="scenario">Connecting…</div>
+    </div>
+    <div class="hud hud-tr glass legend">
+      <div><i style="background:rgba(56,189,248,.75)"></i>Loop occupied (seen by controller)</div>
+      <div><i style="background:rgba(57,135,229,.85)"></i>Estimated queue</div>
+      <div><i style="background:transparent;border:1.5px solid #d6d7dd"></i>True queue (hidden from controller)</div>
+      <div><i style="background:transparent;border:1.5px dashed #e5484d"></i>Faulty detector</div>
+    </div>
+    <div class="banner" id="banner"></div>
+    <div class="zoom"><button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">−</button></div>
+    <div class="conn" id="conn"></div>
+    <div class="hud hud-bl glass">
+      <div class="phasebar">
+        <div class="phase-name" id="phase">—</div>
+        <div class="track" id="track"><div class="fill" id="fill"></div>
+          <div class="tick" id="tmin"></div><div class="tick-label" id="lmin">min</div>
+        </div>
+        <div class="mono" id="elapsed" style="font-size:13px;min-width:120px;text-align:right">—</div>
+      </div>
+    </div>
+    <div class="summary" id="summary"><div class="glass" style="pointer-events:all">
+      <div class="row" style="justify-content:space-between"><h2>Run complete</h2><button class="btn" style="width:auto;margin:0;padding:6px 10px" id="closeSummary">Close</button></div>
+      <div class="scen" id="summaryLine"></div>
+      <div class="grid" id="summaryGrid"></div>
+    </div></div>
+  </div>
+
+  <aside class="panel">
+    <div class="card">
+      <div class="ctrl"><div><div class="ctrl-name" id="ctrlName">—</div><div class="scen" style="margin-top:2px" id="ctrlSub">controller</div></div>
+      <span class="pill" id="jevBadge">—</span></div>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="card decision" id="decisionCard">
+      <h3><span>Latest decision</span><span class="mono" id="decTime"></span></h3>
+      <div id="decisionBody"><div class="empty">Waiting for the first decision point (after minimum green)…</div></div>
+    </div>
+    <div class="card">
+      <h3><span>Sensors vs truth</span><span style="text-transform:none;letter-spacing:0">queued veh</span></h3>
+      <div id="queues"></div>
+    </div>
+    <div class="card">
+      <h3><span>Decision feed</span></h3>
+      <div class="feed" id="feed"><div class="empty">No decisions yet.</div></div>
+    </div>
+  </aside>
+</div>
+
+<div class="modal" id="modal"><div class="box">
+  <header><div><b>State sent to Jev</b><div class="scen" style="margin-top:2px">Built only from detector data. Validated with Pydantic before every call.</div></div>
+    <button class="btn" style="width:auto;margin:0;padding:6px 12px" id="closeModal">Close</button></header>
+  <pre id="json"></pre>
+</div></div>
+
+<script>
+(() => {
+  "use strict";
+  const WS_BASE = "__WS_URL__";
+  const SESSION = "__SESSION_ID__";
+  const APPROACHES = ["north", "south", "east", "west"];
+  const TRAVEL = { north: [0, -1], south: [0, 1], east: [-1, 0], west: [1, 0] };
+  const CAR_COLORS = ["#e6e7ea", "#a3a9b3", "#454c5c", "#23272f", "#2f5288", "#8a2a35", "#3f6250", "#c9c0ae", "#5b6f8f", "#9b9589"];
+  const SOURCE_LABEL = { jev: "Jev", fallback: "Fallback", strategy: "Rule-based", safety: "Safety" };
+  const SOURCE_COLOR = { jev: "#3987e5", fallback: "#e0a526", strategy: "#7c7f8c", safety: "#e5484d" };
+  const CONGESTION = ["Free flow", "Light", "Moderate", "Heavy", "Gridlock risk"];
+  const CONGESTION_COLOR = ["#2fb67c", "#2fb67c", "#e0a526", "#e5733a", "#e5484d"];
+  const LOS_COLOR = { A: "#2fb67c", B: "#2fb67c", C: "#e0a526", D: "#e0a526", E: "#e5733a", F: "#e5484d" };
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $("map"), ctx = canvas.getContext("2d");
+  const state = { geo: null, detectors: [], prev: null, cur: null, prevMap: new Map(), interval: 66,
+    viewRadius: 54, dpr: 1, feed: [], lastDecision: null, session: null, ws: null, finished: false, bg: null, bgKey: "" };
+
+  // ------------------------------------------------------------------ connection
+  function connect() {
+    const url = `${WS_BASE}/ws/sessions/${SESSION}`;
+    const ws = new WebSocket(url);
+    state.ws = ws;
+    $("conn").textContent = "connecting…";
+    ws.onopen = () => { $("conn").textContent = ""; };
+    ws.onmessage = (ev) => handle(JSON.parse(ev.data));
+    ws.onclose = () => {
+      if (state.finished) { $("conn").textContent = ""; return; }
+      $("conn").textContent = "reconnecting…";
+      setTimeout(connect, 1500);
+    };
+  }
+
+  function handle(msg) {
+    switch (msg.type) {
+      case "init":
+        state.geo = msg.geometry; state.detectors = msg.detectors; state.session = msg.session;
+        state.bgKey = "";
+        $("scenario").textContent = `${msg.scenario.name} · ${msg.scenario.tagline}`;
+        $("ctrlName").textContent = msg.session.controller_name;
+        $("ctrlSub").textContent = `seed ${msg.session.seed} · ${msg.session.scenario_name}`;
+        const isJev = msg.session.controller === "jev";
+        $("jevBadge").textContent = isJev ? "AI · Jev" : "Baseline";
+        $("jevBadge").className = "pill " + (isJev ? "src-jev" : "src-strategy");
+        state.feed = []; (msg.decisions || []).forEach((d) => pushFeed(d));
+        if (msg.decisions && msg.decisions.length) renderDecision(msg.decisions[msg.decisions.length - 1], false);
+        renderFeed();
+        break;
+      case "frame": onFrame(msg); break;
+      case "decision": renderDecision(msg.decision, true); pushFeed(msg.decision); renderFeed(); break;
+      case "status": setStatus(msg.status, msg.speed); break;
+      case "summary": state.finished = true; showSummary(msg.summary); break;
+    }
+  }
+
+  function onFrame(frame) {
+    const now = performance.now();
+    if (state.cur) {
+      const dt = now - state.cur.at;
+      state.interval = Math.min(250, Math.max(30, state.interval * 0.8 + dt * 0.2));
+      state.prev = state.cur;
+      state.prevMap = new Map(state.prev.data.vehicles.map((v) => [v[0], v]));
+    }
+    state.cur = { data: frame, at: now };
+    setStatus(frame.status, frame.speed);
+    updateHud(frame);
+    updatePanel(frame);
+  }
+
+  // ------------------------------------------------------------------ camera
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    state.dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(r.width * state.dpr));
+    canvas.height = Math.max(1, Math.round(r.height * state.dpr));
+    state.bgKey = "";
+  }
+  function scale() { return Math.min(canvas.width, canvas.height) / (2 * state.viewRadius); }
+  function toScreen(x, y) { const s = scale(); return [canvas.width / 2 + x * s, canvas.height / 2 - y * s]; }
+  function zoom(f) { state.viewRadius = Math.min(260, Math.max(28, state.viewRadius * f)); state.bgKey = ""; }
+  canvas.addEventListener("wheel", (e) => { e.preventDefault(); zoom(e.deltaY > 0 ? 1.1 : 1 / 1.1); }, { passive: false });
+  $("zin").onclick = () => zoom(1 / 1.2); $("zout").onclick = () => zoom(1.2);
+  window.addEventListener("resize", resize);
+
+  // ------------------------------------------------------------------ static layer
+  function worldCtx(c) { const s = scale(); c.setTransform(s, 0, 0, -s, canvas.width / 2, canvas.height / 2); }
+
+  function buildBackground() {
+    const g = state.geo; if (!g) return;
+    const key = `${canvas.width}x${canvas.height}@${state.viewRadius}`;
+    if (state.bgKey === key) return;
+    state.bgKey = key;
+    const off = document.createElement("canvas"); off.width = canvas.width; off.height = canvas.height;
+    const c = off.getContext("2d");
+    c.fillStyle = "#0b0e13"; c.fillRect(0, 0, off.width, off.height);
+    worldCtx(c);
+    const R = state.viewRadius * Math.max(canvas.width, canvas.height) / Math.min(canvas.width, canvas.height) + 20;
+    const half = g.lane_width * g.lanes, walk = 3.2;
+
+    // City blocks with a few building footprints.
+    const blocks = [[1, 1], [-1, 1], [1, -1], [-1, -1]];
+    blocks.forEach(([sx, sy], bi) => {
+      c.fillStyle = "#1a1e27";
+      c.fillRect(sx > 0 ? half : -R, sy > 0 ? half : -R, R - half, R - half);
+      c.fillStyle = "#0f131a";
+      const inset = half + walk;
+      c.beginPath(); roundRectPath(c, sx > 0 ? inset : -R, sy > 0 ? inset : -R, R - inset, R - inset, 3); c.fill();
+      for (let i = 0; i < 6; i++) {
+        const w = 10 + ((bi * 7 + i * 13) % 9) * 2.2, h = 9 + ((bi * 5 + i * 11) % 7) * 2.4;
+        const ox = inset + 4 + (i % 3) * 25 + ((bi + i) % 2) * 3, oy = inset + 4 + Math.floor(i / 3) * 26 + (i % 2) * 2;
+        const x = sx > 0 ? ox : -ox - w, y = sy > 0 ? oy : -oy - h;
+        c.fillStyle = i % 2 ? "#151a23" : "#131820";
+        c.beginPath(); roundRectPath(c, x, y, w, h, 1.4); c.fill();
+        c.strokeStyle = "rgba(255,255,255,0.035)"; c.lineWidth = 0.25; c.stroke();
+      }
+    });
+
+    // Asphalt.
+    c.fillStyle = "#15181f";
+    c.fillRect(-half, -R, 2 * half, 2 * R);
+    c.fillRect(-R, -half, 2 * R, 2 * half);
+
+    APPROACHES.forEach((a) => drawLegMarkings(c, a, g, R));
+    state.bg = off;
+  }
+
+  function drawLegMarkings(c, a, g, R) {
+    const [dx, dy] = TRAVEL[a];           // inbound travel direction
+    const ox = -dx, oy = -dy;             // outward along the leg
+    const rx = dy, ry = -dx;              // right-hand normal of inbound travel
+    const half = g.lane_width * g.lanes, stop = g.stop_line, cw = g.crosswalk_centre, cww = g.crosswalk_width;
+    const P = (along, lat) => [ox * along + rx * lat, oy * along + ry * lat];
+    const line = (a1, l1, a2, l2) => { const p = P(a1, l1), q = P(a2, l2); c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke(); };
+
+    // Double yellow centre line.
+    c.strokeStyle = "rgba(214,168,64,0.85)"; c.lineWidth = 0.14;
+    line(stop, 0.18, R, 0.18); line(stop, -0.18, R, -0.18);
+    // Inbound lane divider: solid near the stop line, dashed upstream.
+    c.strokeStyle = "rgba(255,255,255,0.55)"; c.lineWidth = 0.13;
+    line(stop, g.lane_width, stop + 30, g.lane_width);
+    c.setLineDash([3, 6]); line(stop + 30, g.lane_width, R, g.lane_width);
+    line(cw + cww / 2 + 1, -g.lane_width, R, -g.lane_width);
+    c.setLineDash([]);
+    // Edge lines.
+    c.strokeStyle = "rgba(255,255,255,0.22)"; c.lineWidth = 0.12;
+    line(half + 0.2, half - 0.25, R, half - 0.25); line(half + 0.2, -half + 0.25, R, -half + 0.25);
+    // Stop line.
+    c.strokeStyle = "rgba(255,255,255,0.92)"; c.lineWidth = 0.45;
+    line(stop, 0.35, stop, half - 0.2);
+    // Zebra crosswalk.
+    c.fillStyle = "rgba(255,255,255,0.72)";
+    for (let lat = -half + 0.4; lat < half - 0.2; lat += 1.1) {
+      const p = P(cw - cww / 2, lat), q = P(cw + cww / 2, lat + 0.55);
+      c.fillRect(Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.abs(q[0] - p[0]) || 0.55, Math.abs(q[1] - p[1]) || 0.55);
+    }
+    // Lane arrows 9 m behind the stop line.
+    drawArrow(c, P(stop + 9, g.lane_width * 0.5), [dx, dy], "left");
+    drawArrow(c, P(stop + 9, g.lane_width * 1.5), [dx, dy], "through-right");
+  }
+
+  function drawArrow(c, [x, y], [dx, dy], kind) {
+    c.save(); c.translate(x, y); c.rotate(Math.atan2(dy, dx));
+    c.strokeStyle = "rgba(255,255,255,0.5)"; c.fillStyle = "rgba(255,255,255,0.5)"; c.lineWidth = 0.28; c.lineJoin = "round";
+    const head = (hx, hy, ang) => { c.save(); c.translate(hx, hy); c.rotate(ang); c.beginPath(); c.moveTo(0.7, 0); c.lineTo(-0.3, 0.55); c.lineTo(-0.3, -0.55); c.closePath(); c.fill(); c.restore(); };
+    c.beginPath();
+    if (kind === "left") { c.moveTo(-2.4, 0); c.lineTo(0, 0); c.quadraticCurveTo(1.0, 0, 1.0, 1.1); c.stroke(); head(1.0, 1.4, Math.PI / 2); }
+    else { c.moveTo(-2.4, 0); c.lineTo(1.2, 0); c.stroke(); head(1.5, 0, 0);
+      c.beginPath(); c.moveTo(-0.6, 0); c.quadraticCurveTo(0.4, 0, 0.4, -0.9); c.stroke(); head(0.4, -1.2, -Math.PI / 2); }
+    c.restore();
+  }
+
+  function roundRectPath(c, x, y, w, h, r) {
+    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r);
+    c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    c.lineTo(x + r, y + h); c.quadraticCurveTo(x, y + h, x, y + h - r);
+    c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.closePath();
+  }
+
+  // ------------------------------------------------------------------ dynamic layer
+  const VEH = { 0: [4.5, 1.85], 1: [5.6, 2.0], 2: [12.0, 2.55], 3: [10.5, 2.5], 4: [6.0, 2.1] };
+
+  function lerpAngle(a, b, t) { let d = b - a; while (d > Math.PI) d -= 2 * Math.PI; while (d < -Math.PI) d += 2 * Math.PI; return a + d * t; }
+
+  function draw(now) {
+    requestAnimationFrame(draw);
+    if (!state.geo || !state.cur) { drawIdle(); return; }
+    buildBackground();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(state.bg, 0, 0);
+    worldCtx(ctx);
+    const f = state.cur.data;
+    drawQueues(f);
+    drawDetectors(f);
+    drawSignals(f);
+    drawPedestrians(f);
+    const t = Math.min(1, (now - state.cur.at) / state.interval);
+    const blink = Math.floor(now / 380) % 2 === 0, strobe = Math.floor(now / 140) % 2 === 0;
+    for (const v of f.vehicles) {
+      const p = state.prevMap.get(v[0]);
+      let x = v[1], y = v[2], h = v[3];
+      if (p && state.prev) { x = p[1] + (v[1] - p[1]) * t; y = p[2] + (v[2] - p[2]) * t; h = lerpAngle(p[3], v[3], t); }
+      drawVehicle(x, y, h, v[4], v[5], v[0], blink, strobe);
+    }
+    drawOffMap(f);
+  }
+
+  function drawIdle() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#0b0e13"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function drawVehicle(x, y, h, cls, flags, vid, blink, strobe) {
+    const [L, W] = VEH[cls] || VEH[0];
+    const cx = x - Math.cos(h) * L / 2, cy = y - Math.sin(h) * L / 2;
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(h);
+    // Soft shadow.
+    ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.beginPath(); roundRectPath(ctx, -L / 2 + 0.25, -W / 2 - 0.25, L, W, 0.6); ctx.fill();
+    let body = CAR_COLORS[vid % CAR_COLORS.length];
+    if (cls === 2) body = "#d9a62e"; else if (cls === 3) body = "#8b919c"; else if (cls === 4) body = "#f4f5f7";
+    ctx.fillStyle = body; ctx.beginPath(); roundRectPath(ctx, -L / 2, -W / 2, L, W, cls >= 2 ? 0.45 : 0.7); ctx.fill();
+    if (cls === 3) { ctx.fillStyle = "#6c717b"; ctx.fillRect(L / 2 - 2.6, -W / 2 + 0.1, 0.15, W - 0.2); }
+    if (cls === 2) { ctx.fillStyle = "rgba(20,26,36,0.75)"; ctx.fillRect(-L / 2 + 0.8, -W / 2 + 0.25, L - 1.8, W - 0.5); }
+    else if (cls !== 3) {
+      ctx.fillStyle = "rgba(15,20,30,0.78)"; ctx.fillRect(L / 2 - L * 0.32, -W / 2 + 0.22, L * 0.13, W - 0.44);
+      ctx.fillStyle = "rgba(15,20,30,0.55)"; ctx.fillRect(-L / 2 + L * 0.1, -W / 2 + 0.28, L * 0.1, W - 0.56);
+    }
+    // Head and brake lights.
+    ctx.fillStyle = "rgba(255,245,210,0.85)";
+    ctx.fillRect(L / 2 - 0.18, -W / 2 + 0.2, 0.18, 0.38); ctx.fillRect(L / 2 - 0.18, W / 2 - 0.58, 0.18, 0.38);
+    const braking = flags & 1;
+    ctx.fillStyle = braking ? "#ff3b3b" : "rgba(150,30,30,0.9)";
+    if (braking) { ctx.shadowColor = "#ff2d2d"; ctx.shadowBlur = 10; }
+    ctx.fillRect(-L / 2, -W / 2 + 0.15, 0.2, 0.42); ctx.fillRect(-L / 2, W / 2 - 0.57, 0.2, 0.42);
+    ctx.shadowBlur = 0;
+    // Turn indicators (left side is +y in the vehicle frame).
+    if (blink && (flags & 6)) {
+      const side = (flags & 2) ? 1 : -1;
+      ctx.fillStyle = "#ffb020"; ctx.shadowColor = "#ffb020"; ctx.shadowBlur = 8;
+      ctx.fillRect(L / 2 - 0.35, side > 0 ? W / 2 - 0.25 : -W / 2, 0.35, 0.25);
+      ctx.fillRect(-L / 2, side > 0 ? W / 2 - 0.25 : -W / 2, 0.35, 0.25);
+      ctx.shadowBlur = 0;
+    }
+    if (cls === 4) {
+      ctx.fillStyle = "#e5484d"; ctx.fillRect(-0.3, -W / 2 + 0.3, 1.4, W - 0.6);
+      ctx.fillStyle = strobe ? "#ff2d2d" : "#2d7dff"; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 22;
+      ctx.fillRect(0.4, -W / 2 + 0.25, 0.5, W / 2 - 0.25);
+      ctx.fillStyle = strobe ? "#2d7dff" : "#ff2d2d"; ctx.shadowColor = ctx.fillStyle;
+      ctx.fillRect(0.4, 0, 0.5, W / 2 - 0.25);
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+  }
+
+  function drawDetectors(f) {
+    const faults = new Set(f.faults || []);
+    state.detectors.forEach((d, i) => {
+      const on = f.detectors[i] === "1", bad = faults.has(d.id);
+      ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.h);
+      if (on) { ctx.fillStyle = bad ? "rgba(229,72,77,0.35)" : "rgba(56,189,248,0.55)"; ctx.shadowColor = bad ? "#e5484d" : "#38bdf8"; ctx.shadowBlur = 14; ctx.fillRect(-1, -1.3, 2, 2.6); ctx.shadowBlur = 0; }
+      ctx.strokeStyle = bad ? "#e5484d" : "rgba(56,189,248,0.38)"; ctx.lineWidth = bad ? 0.22 : 0.14;
+      if (bad) ctx.setLineDash([0.5, 0.4]);
+      ctx.strokeRect(-1, -1.3, 2, 2.6); ctx.setLineDash([]);
+      ctx.restore();
+    });
+  }
+
+  function drawSignals(f) {
+    const g = state.geo, half = g.lane_width * g.lanes;
+    APPROACHES.forEach((a) => {
+      const [dx, dy] = TRAVEL[a]; const rx = dy, ry = -dx;
+      const along = g.stop_line + 1.4, lat = half + 1.6;
+      const x = -dx * along + rx * lat, y = -dy * along + ry * lat;
+      const color = f.signal.colors[a];
+      ctx.save(); ctx.translate(x, y); ctx.rotate(Math.atan2(dy, dx));
+      ctx.fillStyle = "#07090c"; ctx.strokeStyle = "rgba(255,255,255,0.15)"; ctx.lineWidth = 0.1;
+      ctx.beginPath(); roundRectPath(ctx, -0.75, -2.05, 1.5, 4.1, 0.5); ctx.fill(); ctx.stroke();
+      [["red", -1.3, "#ff3b3b"], ["yellow", 0, "#ffc02e"], ["green", 1.3, "#2ee27a"]].forEach(([name, off, hex]) => {
+        const lit = color === name;
+        ctx.beginPath(); ctx.arc(0, off, 0.5, 0, Math.PI * 2);
+        ctx.fillStyle = lit ? hex : "rgba(255,255,255,0.07)";
+        if (lit) { ctx.shadowColor = hex; ctx.shadowBlur = 24; }
+        ctx.fill(); ctx.shadowBlur = 0;
+      });
+      ctx.restore();
+      // Pedestrian head for the crosswalk on this leg.
+      const ped = f.signal.ped[a];
+      const px = -dx * g.crosswalk_centre + rx * (half + 1.3) , py = -dy * g.crosswalk_centre + ry * (half + 1.3);
+      const walkLit = ped === "walk", flash = ped === "flash" && Math.floor(performance.now() / 450) % 2 === 0;
+      ctx.beginPath(); ctx.arc(px, py, 0.55, 0, Math.PI * 2);
+      ctx.fillStyle = walkLit ? "#f4f5f7" : flash || ped === "dont_walk" ? (flash ? "#ff8a3d" : "rgba(255,138,61,0.35)") : "#333";
+      if (walkLit || flash) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 12; }
+      ctx.fill(); ctx.shadowBlur = 0;
+    });
+  }
+
+  function drawPedestrians(f) {
+    for (const [, x, y, crossing] of f.pedestrians) {
+      ctx.beginPath(); ctx.arc(x, y, crossing ? 0.42 : 0.36, 0, Math.PI * 2);
+      ctx.fillStyle = crossing ? "#ffffff" : "rgba(214,215,221,0.65)";
+      if (crossing) { ctx.shadowColor = "#ffffff"; ctx.shadowBlur = 6; }
+      ctx.fill(); ctx.shadowBlur = 0;
+    }
+  }
+
+  function drawQueues(f) {
+    const g = state.geo, half = g.lane_width * g.lanes;
+    const est = f.queues.estimated || {}, tru = f.queues.true || {};
+    const PER_VEH = 6.6;
+    APPROACHES.forEach((a) => {
+      const [dx, dy] = TRAVEL[a]; const rx = dy, ry = -dx;
+      const lat = half + 1.35;
+      const seg = (len, stroke, width) => {
+        if (len <= 0) return;
+        const x0 = -dx * g.stop_line + rx * lat, y0 = -dy * g.stop_line + ry * lat;
+        const x1 = x0 - dx * len, y1 = y0 - dy * len;
+        ctx.save(); ctx.lineCap = "round"; ctx.lineWidth = width;
+        ctx.strokeStyle = stroke; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); ctx.restore();
+      };
+      seg((est[a] || 0) * PER_VEH, "rgba(57,135,229,0.75)", 1.1);
+      const tl = (tru[a] || 0) * PER_VEH;
+      if (tl > 0) {
+        const x0 = -dx * g.stop_line + rx * (lat + 1.1), y0 = -dy * g.stop_line + ry * (lat + 1.1);
+        ctx.strokeStyle = "rgba(214,215,221,0.85)"; ctx.lineWidth = 0.28; ctx.setLineDash([1.2, 0.8]);
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x0 - dx * tl, y0 - dy * tl); ctx.stroke(); ctx.setLineDash([]);
+      }
+    });
+  }
+
+  function drawOffMap(f) {
+    const off = f.queues.off_map || {};
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    APPROACHES.forEach((a) => {
+      const n = off[a] || 0; if (!n) return;
+      const [dx, dy] = TRAVEL[a];
+      const [sx, sy] = toScreen(-dx * state.viewRadius * 0.86 + dy * 9, -dy * state.viewRadius * 0.86 - dx * 9);
+      const text = `+${n} backed up off-map`;
+      ctx.font = `${12 * state.dpr}px Inter, sans-serif`;
+      const w = ctx.measureText(text).width + 18 * state.dpr, h = 24 * state.dpr;
+      ctx.fillStyle = "rgba(229,72,77,0.18)"; ctx.strokeStyle = "rgba(229,72,77,0.6)"; ctx.lineWidth = state.dpr;
+      ctx.beginPath(); roundRectPath(ctx, sx - w / 2, sy - h / 2, w, h, 8 * state.dpr); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "#ffd7d8"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(text, sx, sy);
+    });
+  }
+
+  // ------------------------------------------------------------------ HUD & panel
+  const fmtClock = (t) => { const m = Math.floor(t / 60), s = Math.floor(t % 60); return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`; };
+  const PHASE_LABEL = { north_south: "North–South", east_west: "East–West" };
+
+  function setStatus(status, speed) {
+    const el = $("status");
+    const labels = { running: "Live", paused: "Paused", finished: "Finished", stopped: "Stopped", failed: "Failed", created: "Starting" };
+    el.innerHTML = (status === "running" ? '<span class="live-dot"></span>' : "") + (labels[status] || status);
+    if (speed !== undefined) $("speed").textContent = `×${Number(speed).toFixed(speed < 1 ? 1 : 0)}`;
+    if (status === "finished" || status === "stopped" || status === "failed") state.finished = true;
+  }
+
+  function updateHud(f) {
+    $("clock").textContent = fmtClock(f.t);
+    const s = f.signal;
+    const colorHex = s.interval === "green" ? "#2fb67c" : s.interval === "yellow" ? "#e0a526" : "#e5484d";
+    const label = s.interval === "green" ? `${PHASE_LABEL[s.phase]} green` : s.interval === "yellow" ? `${PHASE_LABEL[s.phase]} yellow` : "All red";
+    $("phase").textContent = label; $("phase").style.color = colorHex;
+    const max = s.max_green, g = s.interval === "green" ? s.green_elapsed : max;
+    $("fill").style.width = `${Math.min(100, (g / max) * 100)}%`;
+    $("fill").style.background = colorHex;
+    const minPct = Math.min(100, (s.min_green / max) * 100);
+    $("tmin").style.left = `${minPct}%`; $("lmin").style.left = `${minPct}%`; $("lmin").textContent = `min ${s.min_green.toFixed(0)}s`;
+    $("elapsed").textContent = s.interval === "green"
+      ? `${s.green_elapsed.toFixed(1)}s / ${max.toFixed(0)}s${s.extension > 0 ? ` · +${s.extension.toFixed(0)}s ext` : ""}`
+      : `${s.interval_elapsed.toFixed(1)}s`;
+    const banner = $("banner");
+    if (s.preempt) { banner.style.display = "block"; banner.textContent = `🚑 Emergency preemption: ${s.preempt} approach`; }
+    else banner.style.display = "none";
+  }
+
+  function kpi(value, label, extra = "") { return `<div class="kpi"><div class="v">${value}${extra}</div><div class="l">${label}</div></div>`; }
+  function los(d) { return d <= 10 ? "A" : d <= 20 ? "B" : d <= 35 ? "C" : d <= 55 ? "D" : d <= 80 ? "E" : "F"; }
+
+  function updatePanel(f) {
+    const k = f.kpi;
+    if (k) {
+      const grade = los(k.avg_delay_cumulative_s);
+      $("kpis").innerHTML =
+        kpi(`${k.avg_delay_cumulative_s.toFixed(1)}s`, `Delay<span class="los" style="background:${LOS_COLOR[grade]}22;color:${LOS_COLOR[grade]}">LOS ${grade}</span>`) +
+        kpi(k.throughput_vph.toFixed(0), "Veh / hour") +
+        kpi(k.served, "Served") +
+        kpi(k.vehicles_in_network, "In network") +
+        kpi(`${k.max_wait_s.toFixed(0)}s`, "Longest wait") +
+        kpi(`${k.avg_delay_recent_s.toFixed(1)}s`, "Delay · 60s");
+    }
+    const est = f.queues.estimated || {}, tru = f.queues.true || {};
+    const maxQ = Math.max(12, ...APPROACHES.map((a) => Math.max(est[a] || 0, tru[a] || 0)));
+    $("queues").innerHTML = APPROACHES.map((a) => {
+      const e = est[a] || 0, t = tru[a] || 0;
+      return `<div class="qrow"><span style="color:var(--text-2);text-transform:capitalize">${a}</span>
+        <div class="qtrack"><div class="qest" style="width:${(e / maxQ) * 100}%"></div><div class="qtrue" style="left:calc(${(t / maxQ) * 100}% - 1px)"></div></div>
+        <span class="qnum">${e.toFixed(1)} · <span style="color:#d6d7dd">${t}</span></span></div>`;
+    }).join("") + `<div class="scen" style="font-size:11px;margin-top:6px"><span style="color:var(--accent)">■</span> estimate from loops &nbsp; <span style="color:#d6d7dd">▍</span> ground truth</div>`;
+  }
+
+  function actionText(action) {
+    if (action.startsWith("switch_to_")) return `Switch → ${PHASE_LABEL[action.slice(10)] || action.slice(10)}`;
+    return { keep_current_phase: "Keep current green", extend_current_green: "Extend green" }[action] || action;
+  }
+
+  function renderDecision(d, flash) {
+    state.lastDecision = d;
+    $("decTime").textContent = `t ${fmtClock(d.t)}`;
+    const probs = d.probabilities || null;
+    const src = d.source;
+    let html = `<div class="action">${actionText(d.action)}</div><div class="meta">
+      <span class="pill src-${src}">${SOURCE_LABEL[src] || src}</span>`;
+    if (d.latency_ms != null) html += `<span class="pill mono">${d.latency_ms.toFixed(0)} ms</span>`;
+    if (d.confidence != null) html += `<span class="pill mono">conf ${(d.confidence * 100).toFixed(0)}%</span>`;
+    if (d.applied !== d.action) html += `<span class="pill src-safety">${d.applied}</span>`;
+    html += `</div>`;
+    if (probs) {
+      const entries = d.legal.map((a) => [a, probs[a] || 0]);
+      html += entries.map(([a, p]) => {
+        const chosen = a === (d.jev && d.jev.choice ? d.jev.choice : d.action);
+        return `<div class="prob"><span class="name ${chosen ? "chosen" : ""}">${actionText(a)}</span>
+          <div class="bar"><div class="${chosen ? "chosen" : ""}" style="width:${(p * 100).toFixed(1)}%"></div></div>
+          <span class="pv">${(p * 100).toFixed(0)}%</span></div>`;
+      }).join("");
+    } else {
+      html += `<div class="empty">Deterministic rule: no probability distribution.</div>`;
+    }
+    if (d.jev && d.jev.congestion_score != null) {
+      const s = d.jev.congestion_score, idx = Math.max(0, Math.min(4, Math.round(s)));
+      html += `<div class="scen" style="margin-top:12px;display:flex;justify-content:space-between"><span>Jev congestion read</span>
+        <b style="color:${CONGESTION_COLOR[idx]}">${CONGESTION[idx]} · ${s.toFixed(1)}/4</b></div>
+        <div class="congestion">${[0, 1, 2, 3, 4].map((i) => `<span style="background:${i <= idx ? CONGESTION_COLOR[idx] : ""}"></span>`).join("")}</div>`;
+    }
+    if (d.jev && d.jev.error) html += `<div class="rationale" style="color:#ffd7d8">⚠ ${escapeHtml(d.jev.error)}</div>`;
+    html += `<div class="rationale">${escapeHtml(d.rationale)}</div>`;
+    if (d.jev && d.jev.state) html += `<button class="btn" id="showState">{ } View the exact state sent to Jev</button>`;
+    $("decisionBody").innerHTML = html;
+    const btn = $("showState"); if (btn) btn.onclick = () => openJson(d.jev);
+    if (flash && (d.action !== "keep_current_phase" || src === "jev")) {
+      const card = $("decisionCard"); card.classList.remove("flash"); void card.offsetWidth; card.classList.add("flash");
+      setTimeout(() => card.classList.remove("flash"), 900);
+    }
+  }
+
+  function pushFeed(d) {
+    const last = state.feed[0];
+    if (last && last.action === d.action && last.source === d.source && d.action === "keep_current_phase") { last.count += 1; last.t = d.t; last.confidence = d.confidence; return; }
+    state.feed.unshift({ t: d.t, action: d.action, source: d.source, confidence: d.confidence, count: 1 });
+    state.feed.length = Math.min(state.feed.length, 7);
+  }
+
+  function renderFeed() {
+    if (!state.feed.length) return;
+    $("feed").innerHTML = state.feed.map((d) => `<div class="feed-item"><span class="t">${fmtClock(d.t)}</span>
+      <span><span class="dot" style="background:${SOURCE_COLOR[d.source]}"></span>${actionText(d.action)}${d.count > 1 ? ` <span class="jf-muted" style="color:var(--muted)">×${d.count}</span>` : ""}</span>
+      <span class="mono" style="color:var(--muted);font-size:11px">${d.confidence != null ? (d.confidence * 100).toFixed(0) + "%" : "rule"}</span></div>`).join("");
+  }
+
+  function showSummary(s) {
+    const grade = s.level_of_service;
+    $("summaryLine").textContent = `${s.vehicles_served} vehicles served in ${fmtClock(s.simulated_seconds)} of simulated time`;
+    const cell = (v, l) => `<div><div class="big">${v}</div><div class="scen" style="margin-top:2px">${l}</div></div>`;
+    $("summaryGrid").innerHTML = cell(`${s.avg_control_delay_s}s`, `avg delay · LOS ${grade}`) + cell(`${s.p95_delay_s}s`, "95th pct delay") +
+      cell(s.stops_per_vehicle, "stops / vehicle") + cell(s.throughput_vph, "veh / hour") + cell(s.fairness_index, "fairness (Jain)") +
+      cell(s.jev_avg_latency_ms != null ? `${s.jev_avg_latency_ms}ms` : s.phase_switches, s.jev_avg_latency_ms != null ? "avg Jev latency" : "phase switches");
+    $("summary").style.display = "flex";
+  }
+  $("closeSummary").onclick = () => { $("summary").style.display = "none"; };
+
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function highlight(json) {
+    return escapeHtml(json).replace(/(&quot;(?:\\.|[^&]|&(?!quot;))*?&quot;)(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g, (m, str, colon, bool) => {
+      if (str) return colon ? `<span class="k">${str}</span>${colon}` : `<span class="s">${str}</span>`;
+      if (bool) return `<span class="b">${m}</span>`;
+      return `<span class="n">${m}</span>`;
+    });
+  }
+  function openJson(jev) {
+    const payload = { model: jev.model, state: jev.state, questions: jev.questions };
+    $("json").innerHTML = highlight(JSON.stringify(payload, null, 2));
+    $("modal").style.display = "flex";
+  }
+  $("closeModal").onclick = () => { $("modal").style.display = "none"; };
+  $("modal").onclick = (e) => { if (e.target.id === "modal") $("modal").style.display = "none"; };
+
+  resize();
+  connect();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
